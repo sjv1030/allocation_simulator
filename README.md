@@ -24,58 +24,6 @@ client-side — no server, no backend — and deploys as a GitHub Pages site.
 
 ---
 
-## Deploy to GitHub Pages — step by step
-
-Your GitHub account: **https://github.com/sjv1030**
-
-### Step 1 — Create a repository
-
-1. Go to https://github.com/new
-2. **Repository name:** anything you like — e.g. `allocation-simulator`.
-3. Set it to **Public** (GitHub Pages on the free plan needs public repos).
-4. Leave "Add a README" unchecked (you already have one).
-5. Click **Create repository**.
-
-### Step 2 — Upload the three files
-
-1. On the new repo's page, click **Add file → Upload files**.
-2. Drag in **`index.html`**, **`aligned_returns.csv`**, and **`README.md`**.
-3. Click **Commit changes**.
-
-### Step 3 — Point the app at your data URL
-
-The app needs the *raw* URL of your CSV. With the repo name
-`allocation-simulator` and the default `main` branch, that URL is:
-
-```
-https://raw.githubusercontent.com/sjv1030/allocation-simulator/main/aligned_returns.csv
-```
-
-(If you named the repo something else, swap that in. To be certain of the URL,
-click `aligned_returns.csv` in your repo, then the **Raw** button, and copy the
-address bar.)
-
-Now set it in the app:
-
-1. In your repo, click **`index.html` → the pencil icon (Edit)**.
-2. Near the top of the `<script>` block, find this line:
-
-   ```js
-   const DATA_CSV_URL = "REPLACE_WITH_YOUR_RAW_CSV_URL";
-   ```
-
-3. Replace the placeholder with your raw URL:
-
-   ```js
-   const DATA_CSV_URL = "https://raw.githubusercontent.com/sjv1030/allocation-simulator/main/aligned_returns.csv";
-   ```
-
-4. Click **Commit changes**.
-
-> If you skip this step, the page still works but runs on **synthetic demo
-> data** and shows an amber status dot. Setting the URL switches it to your real
-> data (green dot, "Loaded 168 monthly observations").
-
 ### Step 4 — Turn on GitHub Pages
 
 1. In the repo, go to **Settings → Pages** (left sidebar).
