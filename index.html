@@ -659,7 +659,7 @@ function renderLevels(){
   Plotly.react('equityLevels',eqData,eqLayout,CONFIG);
 
   document.getElementById('levelsNote').textContent=
-    `Total-return index levels, ${L.dates[0]} to ${L.dates[L.dates.length-1]} (${L.dates.length} months). Bonds and equities shown separately because their scales differ.`;
+    `Index levels, ${L.dates[0]} to ${L.dates[L.dates.length-1]} (${L.dates.length} months). Bonds (total return) and equities (price) shown separately because their scales differ.`;
 }
 
 function run(){
