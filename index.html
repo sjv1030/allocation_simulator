@@ -173,7 +173,7 @@
   <!-- MARKET LEVELS -->
   <section style="border-top:0;padding-top:26px">
     <div class="sec-head"><span class="sec-num">00</span><h2>Historical index levels</h2></div>
-    <p class="sec-note" id="levelsNote">Index levels over the full sample. Bonds (total return) and equities (price) are shown separately because their scales differ.</p>
+    <p class="sec-note" id="levelsNote">Total-return index levels over the full sample. Bonds and equities are shown separately because their scales differ.</p>
     <div class="chart-grid">
       <div>
         <div class="chart-cap">Bonds — 3-5Y and 10Y+</div>
@@ -257,12 +257,12 @@
    CONFIG  —  point this at your hosted aligned-returns CSV (raw GitHub URL)
    Expected columns (header row): date, equity_return, bond_3_5_return, bond_10_plus_return
    ========================================================================= */
-const DATA_CSV_URL = "https://raw.githubusercontent.com/sjv1030/allocation_simulator/main/aligned_returns.csv";
+const DATA_CSV_URL = "REPLACE_WITH_YOUR_RAW_CSV_URL";
 
 /* Index-levels CSV for the two charts at the top of the page.
    Columns are read positionally (the source header row is offset):
      col 0 = date, col 1 = equity level, col 2 = bond 3-5Y level, col 3 = bond 10Y+ level */
-const LEVELS_CSV_URL = "https://raw.githubusercontent.com/sjv1030/allocation_simulator/main/data.csv";
+const LEVELS_CSV_URL = "REPLACE_WITH_YOUR_RAW_LEVELS_CSV_URL";
 
 /* ---- fixed model assumptions ---- */
 const MONTHS_PER_YEAR = 12;
@@ -407,12 +407,12 @@ function riskClass(p){return p>=0.5?'risk-hi':p>=0.2?'risk-md':'risk-lo';}
 
 function renderKPIs(res){
   const sel=res.rows.find(r=>Math.abs(r.bond_weight-SELECT_BOND_WEIGHT)<1e-9 && Math.abs(r.long_share-SELECT_LONG_SHARE)<1e-9);
-  const best=res.rows[0];
+  const topReturn=res.rows.reduce((a,b)=>b.mean_ann>a.mean_ann?b:a);
   const items=[
     {lab:'Selected · ann. return',val:pct(sel.mean_ann,2),cls:'good'},
     {lab:'Selected · annual shortfall',val:pct(sel.ann_short),cls:sel.ann_short>=0.5?'danger':sel.ann_short>=0.2?'warm':'good'},
-    {lab:'Lowest-risk allocation',val:`${pct(best.bond_weight,0)} bond · ${pct(best.long_share,0)} long`,cls:''},
-    {lab:'Lowest-risk · shortfall',val:pct(best.ann_short),cls:best.ann_short>=0.5?'danger':best.ann_short>=0.2?'warm':'good'},
+    {lab:'Highest-return allocation',val:`${pct(topReturn.bond_weight,0)} bond · ${pct(topReturn.long_share,0)} long`,cls:''},
+    {lab:'Highest-return · ann. return',val:pct(topReturn.mean_ann,2),cls:'good'},
   ];
   document.getElementById('kpis').innerHTML=items.map(i=>
     `<div class="kpi"><div class="k-lab">${i.lab}</div><div class="k-val ${i.cls}">${i.val}</div></div>`).join('');
