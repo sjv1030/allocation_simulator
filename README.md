@@ -24,15 +24,10 @@ client-side — no server, no backend — and deploys as a GitHub Pages site.
 
 ---
 
-### Step 4 — Turn on GitHub Pages
-
-1. In the repo, go to **Settings → Pages** (left sidebar).
-2. Under **Build and deployment → Source**, choose **Deploy from a branch**.
-3. **Branch:** `main`, folder: `/ (root)`. Click **Save**.
-4. Wait ~1 minute. The page will show your live URL:
+The page will show your live URL:
 
    ```
-   https://sjv1030.github.io/allocation-simulator/
+   https://sjv1030.github.io/allocation_simulator/
    ```
 
 Open it — you should see the tool load your data and run automatically.
@@ -66,9 +61,3 @@ date,equity_return,bond_3_5_return,bond_10_plus_return
 
 Returns are decimals (0.01 = 1%), not percents.
 
-## A note on reproducibility
-
-The engine uses a fixed seed, so the tool gives the same numbers every run for a
-given set of inputs. It uses a JavaScript RNG rather than NumPy's, so absolute
-path-level values won't be bit-identical to a Python run of the same model, but
-the distributions and summary statistics are equivalent.
