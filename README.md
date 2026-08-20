@@ -80,7 +80,7 @@ button, and copy the address bar.)
 4. Wait ~1 minute. The page will show your live URL:
 
    ```
-   https://sjv1030.github.io/allocation-simulator/
+   https://sjv1030.github.io/allocation_simulator/
    ```
 
 Open it — you should see the tool load your data and run automatically.
