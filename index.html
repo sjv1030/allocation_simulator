@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Two-Bucket Allocation Simulator</title>
+<title>Two-Bucket Allocation Simulator — GBM</title>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 <style>
   :root{
@@ -72,7 +72,7 @@
   .seg button:hover{color:var(--ink);background:var(--panel-2)}
   .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
 
-  /* ---- guarantee input ---- */
+  /* ---- numeric field ---- */
   .gfield{display:inline-flex;align-items:stretch;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
   .gfield input{
     appearance:none;border:0;background:transparent;color:var(--ink);
@@ -83,6 +83,7 @@
   .gfield input:focus{background:#fff}
   .gfield .unit{display:flex;align-items:center;padding:0 12px 0 4px;color:var(--ink-faint);font-family:var(--mono);font-size:14px}
   .gfield.invalid{border-color:var(--danger)}
+  .gfield.locked{opacity:.55}
 
   .run-meta{margin-left:auto;text-align:right;font-family:var(--mono);font-size:12px;color:var(--ink-faint)}
   .run-meta strong{color:var(--ink);font-weight:600}
@@ -96,6 +97,8 @@
   }
   .btn:hover{opacity:.9}
   .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;color:var(--accent);border-color:var(--line);font-weight:500}
+  .btn.ghost:hover{background:var(--panel)}
   .busy{font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
 
   /* ---- sections ---- */
@@ -107,15 +110,30 @@
 
   .chart{width:100%;height:440px}
   .chart.tall{height:480px}
-  .chart.short{height:300px}
 
-  /* ---- side-by-side level charts ---- */
-  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-  .chart-cap{
-    font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
-    color:var(--ink-dim);margin:0 0 6px;font-weight:600
+  /* ---- assumptions ---- */
+  .assume-grid{display:grid;grid-template-columns:minmax(340px,1.35fr) minmax(280px,1fr);gap:26px;align-items:start}
+  .assume-head{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap;margin:0 0 18px}
+  table.inputs{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12.5px}
+  table.inputs th{
+    background:var(--panel-2);color:var(--ink-dim);font-weight:600;text-align:right;
+    padding:10px 14px;border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.03em;white-space:nowrap
   }
-  @media(max-width:720px){.chart-grid{grid-template-columns:1fr;gap:8px}}
+  table.inputs th:first-child{text-align:left}
+  table.inputs td{padding:8px 14px;text-align:right;border-bottom:1px solid var(--line-soft);white-space:nowrap}
+  table.inputs td:first-child{text-align:left;color:var(--ink)}
+  table.inputs tr:last-child td{border-bottom:0}
+  .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+       padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink-faint);background:var(--panel)}
+  .tag.custom{color:var(--accent-warm);border-color:var(--accent-warm)}
+  .corr-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  table.corr{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:12px}
+  table.corr th{background:var(--panel-2);color:var(--ink-dim);font-weight:600;padding:9px 12px;
+                font-size:11px;text-align:right;border-bottom:1px solid var(--line)}
+  table.corr th:first-child{text-align:left}
+  table.corr td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--line-soft);color:var(--ink)}
+  table.corr td:first-child{text-align:left;color:var(--ink-dim)}
+  table.corr tr:last-child td{border-bottom:0}
 
   /* ---- KPI strip ---- */
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 8px}
@@ -139,6 +157,7 @@
   tbody tr:last-child td{border-bottom:0}
   tbody tr:hover td{background:var(--panel)}
   tbody tr.sel td{background:rgba(15,125,116,.10)}
+  #summaryTable tbody tr{cursor:pointer}
   td.risk-hi{color:var(--danger)}
   td.risk-md{color:var(--accent-warm)}
   td.risk-lo{color:var(--good)}
@@ -147,6 +166,9 @@
   .foot code{background:var(--panel);padding:2px 6px;border-radius:4px;color:var(--ink-dim)}
   a{color:var(--accent)}
 
+  @media(max-width:900px){
+    .assume-grid{grid-template-columns:1fr}
+  }
   @media(max-width:720px){
     .kpis{grid-template-columns:repeat(2,1fr)}
     .controls{gap:22px}
@@ -158,9 +180,9 @@
 <body>
 <header>
   <div class="wrap">
-    <p class="eyebrow">Block-bootstrap Monte Carlo · liability matching</p>
+    <p class="eyebrow">Geometric Brownian motion · liability matching</p>
     <h1>Two-Bucket Allocation Simulator</h1>
-    <p class="sub">Interactive shortfall analysis for a bond/equity portfolio against a compounding guarantee. Set the guarantee rate, horizon, and historical sampling block, then re-run the bootstrap in your browser. Monitoring checkpoints stay annual regardless of block size.</p>
+    <p class="sub">Shortfall analysis for a bond/equity portfolio against a compounding guarantee. Each sleeve is simulated as its own GBM from an annual return and volatility assumption, with the cross-asset correlation taken from history. Set the guarantee, the horizon, and your capital-market assumptions, then re-run in the browser.</p>
     <div class="status">
       <span class="dot" id="dataDot"></span>
       <span id="dataStatus">Loading return series…</span>
@@ -169,22 +191,6 @@
 </header>
 
 <div class="wrap">
-
-  <!-- MARKET LEVELS -->
-  <section style="border-top:0;padding-top:26px">
-    <div class="sec-head"><span class="sec-num">00</span><h2>Historical index levels</h2></div>
-    <p class="sec-note" id="levelsNote">Index levels over the full sample. Bonds (total return) and equities (price) are shown separately because their scales differ.</p>
-    <div class="chart-grid">
-      <div>
-        <div class="chart-cap">Bonds — 3-5Y and 10Y+</div>
-        <div class="chart short" id="bondLevels"></div>
-      </div>
-      <div>
-        <div class="chart-cap">Equity</div>
-        <div class="chart short" id="equityLevels"></div>
-      </div>
-    </div>
-  </section>
 
   <!-- CONTROLS -->
   <div class="controls">
@@ -200,11 +206,40 @@
       <div class="seg" id="horizonSeg" role="group" aria-label="Horizon in years"></div>
     </div>
     <div>
-      <span class="ctl-label">Block size (months)</span>
-      <div class="seg" id="blockSeg" role="group" aria-label="Block size in months"></div>
+      <span class="ctl-label">Paths per allocation</span>
+      <div class="seg" id="simSeg" role="group" aria-label="Simulations per allocation"></div>
     </div>
     <div class="run-meta" id="runMeta"></div>
   </div>
+
+  <!-- ASSUMPTIONS -->
+  <section style="border-top:0">
+    <div class="sec-head"><span class="sec-num">01</span><h2>Return and volatility assumptions</h2></div>
+    <p class="sec-note">Historical uses the mean and standard deviation of the loaded monthly series, annualized. Custom lets you type forward-looking numbers for any sleeve. Correlation always comes from history — it is not something the drift and volatility inputs can set.</p>
+
+    <div class="assume-head">
+      <div>
+        <span class="ctl-label">Assumption source</span>
+        <div class="seg" id="modeSeg" role="group" aria-label="Assumption source"></div>
+      </div>
+      <button class="btn ghost" id="resetBtn" style="margin-bottom:1px">Reset to historical</button>
+    </div>
+
+    <div class="assume-grid">
+      <div>
+        <div class="tbl-scroll">
+          <table class="inputs">
+            <thead><tr><th>Asset sleeve</th><th>Annual return</th><th>Annual volatility</th><th>Source</th></tr></thead>
+            <tbody id="assumeBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <span class="ctl-label">Correlation of monthly log returns (historical)</span>
+        <div class="corr-wrap"><table class="corr" id="corrTable"></table></div>
+      </div>
+    </div>
+  </section>
 
   <div class="runbar">
     <button class="btn" id="runBtn">Run simulation</button>
@@ -219,34 +254,34 @@
 
   <!-- HEATMAP -->
   <section>
-    <div class="sec-head"><span class="sec-num">01</span><h2>Shortfall probability across the allocation grid</h2></div>
-    <p class="sec-note">Colour encodes the probability a path breaches the guarantee at any annual checkpoint — teal is lower risk, red higher. Cell labels show mean annualized return. Which corner is calmest depends on the duration/equity trade-off in your data.</p>
+    <div class="sec-head"><span class="sec-num">02</span><h2>Terminal shortfall probability across the allocation grid</h2></div>
+    <p class="sec-note">Colour encodes the probability that terminal wealth finishes below the compounded guarantee — teal is lower risk, red higher. Cell labels show mean annualized return. Which corner is calmest depends on the duration/equity trade-off in your assumptions.</p>
     <div class="chart" id="heatmap"></div>
   </section>
 
   <!-- PATHS -->
   <section>
-    <div class="sec-head"><span class="sec-num">02</span><h2>Illustrative wealth paths — 60% bonds / 25% long sleeve</h2></div>
-    <p class="sec-note">A sample of simulated paths for the selected allocation, against the compounding guarantee line. Dashed verticals mark the annual monitoring dates.</p>
+    <div class="sec-head"><span class="sec-num">03</span><h2>Illustrative wealth paths</h2></div>
+    <p class="sec-note" id="pathsNote">A sample of simulated paths for the selected allocation, against the compounding guarantee line. The dashed vertical marks the terminal test date.</p>
     <div class="chart tall" id="paths"></div>
   </section>
 
   <!-- DISTRIBUTION -->
   <section>
-    <div class="sec-head"><span class="sec-num">03</span><h2>Terminal cumulative-return distribution</h2></div>
-    <p class="sec-note">All simulated terminal returns for the selected allocation. The amber line is the compounded guarantee threshold over the full horizon; mass to its left represents terminal shortfall.</p>
+    <div class="sec-head"><span class="sec-num">04</span><h2>Terminal cumulative-return distribution</h2></div>
+    <p class="sec-note" id="distNote">All simulated terminal returns for the selected allocation. The amber line is the compounded guarantee threshold over the full horizon; mass to its left is terminal shortfall.</p>
     <div class="chart" id="dist"></div>
   </section>
 
   <!-- TABLE -->
   <section>
-    <div class="sec-head"><span class="sec-num">04</span><h2>Full summary grid</h2></div>
-    <p class="sec-note">Every allocation combination, sorted by annual monitoring shortfall. The selected allocation is highlighted.</p>
+    <div class="sec-head"><span class="sec-num">05</span><h2>Full summary grid</h2></div>
+    <p class="sec-note">Every allocation combination, sorted by terminal shortfall probability. Click any row to redraw the path and distribution charts for that allocation.</p>
     <div class="tbl-scroll"><table id="summaryTable"></table></div>
   </section>
 
   <div class="foot">
-    Engine: feasible-start block bootstrap (no wraparound), <span id="nsimFoot"></span> paths per allocation · guarantee <span id="guarFoot"></span>/yr compounding · seed-fixed for reproducibility.<br>
+    Engine: correlated geometric Brownian motion, <span id="nsimFoot"></span> paths per allocation · monthly steps, rebalanced to target weights each month · guarantee <span id="guarFoot"></span>/yr compounding · seed-fixed, common random numbers across all 20 allocations.<br>
     Data source: <code id="srcFoot">configure DATA_CSV_URL</code><br>
     Runs entirely client-side. No data leaves the browser.
   </div>
@@ -254,36 +289,43 @@
 
 <script>
 /* =========================================================================
-   CONFIG  —  point this at your hosted aligned-returns CSV (raw GitHub URL)
-   Expected columns (header row): date, equity_return, bond_3_5_return, bond_10_plus_return
+   CONFIG  —  point this at your aligned-returns CSV
+   This is the file the Python model writes as tmls_aligned_monthly_returns.csv.
+   Expected columns (header row): date, bond_3_5_return, bond_10_plus_return, equity_return
+   Returns must be decimals (0.0123), not percent. A relative path works if the
+   CSV sits next to index.html in the repo; a raw GitHub URL also works.
    ========================================================================= */
-const DATA_CSV_URL = "https://raw.githubusercontent.com/sjv1030/allocation_simulator/main/aligned_returns.csv";
-
-/* Index-levels CSV for the two charts at the top of the page.
-   Columns are read positionally (the source header row is offset):
-     col 0 = date, col 1 = equity level, col 2 = bond 3-5Y level, col 3 = bond 10Y+ level */
-const LEVELS_CSV_URL = "https://raw.githubusercontent.com/sjv1030/allocation_simulator/main/data.csv";
+const DATA_CSV_URL = "tmls_aligned_monthly_returns.csv";
 
 /* ---- fixed model assumptions ---- */
 const MONTHS_PER_YEAR = 12;
-const N_SIMS          = 50000;
 const SEED            = 42;
 const BOND_WEIGHTS      = [0.60,0.70,0.80,0.90];
 const LONG_BOND_SHARES  = [0.00,0.25,0.50,0.75,1.00];
 const SELECT_BOND_WEIGHT = 0.60;
 const SELECT_LONG_SHARE  = 0.25;
 const N_ILLUSTRATIVE_PATHS = 25;
+const CHUNK_PATHS = 2000;   /* paths per shock block; keeps memory flat */
+
+const ASSETS = [
+  {key:'b35', label:'Bonds 3-5Y'},
+  {key:'b10', label:'Bonds 10Y+'},
+  {key:'eq',  label:'Equity'}
+];
 
 /* ---- toggle options ---- */
 const HORIZON_OPTIONS = [2,5,10];
-const BLOCK_OPTIONS   = [3,6,9,12];
+const NSIM_OPTIONS    = [10000,25000,50000];
 let horizonYears = 2;
-let blockSize    = 12;
-let guaranteeRate = 0.0485; /* decimal; driven by the input field */
+let nSims        = 50000;
+let guaranteeRate = 0.0485;   /* decimal; driven by the input field */
+let assumeMode   = 'history'; /* 'history' | 'custom' */
 
 /* ---- state ---- */
-let RET = null;    // returns: {eq:[], b35:[], b10:[]}
-let LEVELS = null; // levels:  {dates:[], eq:[], b35:[], b10:[]}
+let RET  = null;   // {b35:[], b10:[], eq:[]}  historical monthly returns
+let HIST = null;   // {annRet:[3], annVol:[3], corr:[3][3], n:int}
+let LAST = null;   // last run result
+let selKey = null; // selected allocation key "bw|ls"
 
 /* ---- seeded RNG: mulberry32 (deterministic across runs) ---- */
 function mulberry32(a){
@@ -294,9 +336,64 @@ function mulberry32(a){
     return((t^t>>>14)>>>0)/4294967296;
   };
 }
+/* standard normals via Box-Muller, one cached per pair */
+function normalDraw(rng){
+  let cached=null;
+  return function(){
+    if(cached!==null){const v=cached;cached=null;return v;}
+    let u=0,v=0;
+    while(u===0)u=rng();
+    while(v===0)v=rng();
+    const r=Math.sqrt(-2*Math.log(u)), th=2*Math.PI*v;
+    cached=r*Math.sin(th);
+    return r*Math.cos(th);
+  };
+}
 
 /* =========================================================================
-   ENGINE  —  faithful JS port of draw_block_paths + summary logic
+   CALIBRATION  —  historical moments and correlation
+   ========================================================================= */
+function cholesky(A){
+  const n=A.length;
+  const L=Array.from({length:n},()=>new Float64Array(n));
+  for(let i=0;i<n;i++){
+    for(let j=0;j<=i;j++){
+      let s=0;
+      for(let k=0;k<j;k++) s+=L[i][k]*L[j][k];
+      if(i===j) L[i][j]=Math.sqrt(Math.max(A[i][i]-s,1e-12));
+      else      L[i][j]=(A[i][j]-s)/L[j][j];
+    }
+  }
+  return L;
+}
+
+function estimateHistory(ret){
+  const series=[ret.b35,ret.b10,ret.eq];
+  const n=series[0].length;
+  const mean=[],sd=[];
+  for(const s of series){
+    const m=s.reduce((a,b)=>a+b,0)/n;
+    let v=0; for(const x of s) v+=(x-m)*(x-m);
+    mean.push(m); sd.push(Math.sqrt(v/(n-1)));
+  }
+  /* correlation of log returns, matching the Python model */
+  const logs=series.map(s=>s.map(x=>Math.log1p(x)));
+  const lm=logs.map(s=>s.reduce((a,b)=>a+b,0)/n);
+  const ls=logs.map((s,i)=>{let v=0;for(const x of s)v+=(x-lm[i])*(x-lm[i]);return Math.sqrt(v/(n-1));});
+  const corr=[[1,0,0],[0,1,0],[0,0,1]];
+  for(let i=0;i<3;i++)for(let j=0;j<3;j++){
+    let c=0; for(let k=0;k<n;k++) c+=(logs[i][k]-lm[i])*(logs[j][k]-lm[j]);
+    corr[i][j]=c/((n-1)*ls[i]*ls[j]);
+  }
+  return {
+    annRet: mean.map(m=>Math.pow(1+m,MONTHS_PER_YEAR)-1),
+    annVol: sd.map(s=>s*Math.sqrt(MONTHS_PER_YEAR)),
+    corr, n
+  };
+}
+
+/* =========================================================================
+   ENGINE  —  JS port of the GBM path generator + summary logic
    ========================================================================= */
 function liabilityCurve(nMonths){
   const lmg=Math.pow(1+guaranteeRate,1/MONTHS_PER_YEAR)-1;
@@ -305,89 +402,113 @@ function liabilityCurve(nMonths){
   return curve;
 }
 
-function simulateAllocation(pr, nMonths, blockSz, checkpoints, liabChecks, guar, nPaths, rng, keepPaths){
-  const nBlocks=Math.ceil(nMonths/blockSz);
-  const maxStart=pr.length-blockSz;
-  if(maxStart<0) throw new Error(`History (${pr.length} mo) shorter than one ${blockSz}-mo block.`);
-
-  const cpIdx=checkpoints.map(m=>m-1);
-  let sumAnn=0,sumCum=0,sumTerm=0;
-  let termShortCount=0,annShortCount=0;
-  const termReturns = keepPaths? new Float64Array(nPaths):null;
-  const keptPaths = keepPaths? [] : null;
-  const sampled=new Float64Array(nBlocks*blockSz);
-
-  for(let p=0;p<nPaths;p++){
-    for(let bl=0;bl<nBlocks;bl++){
-      const start=Math.floor(rng()*(maxStart+1));
-      const base=bl*blockSz;
-      for(let k=0;k<blockSz;k++) sampled[base+k]=pr[start+k];
-    }
-    let w=1;
-    let annFail=false;
-    let cpPtr=0;
-    const wealthRow = keepPaths && p<N_ILLUSTRATIVE_PATHS ? new Float64Array(nMonths):null;
-    for(let m=0;m<nMonths;m++){
-      w*=(1+sampled[m]);
-      if(wealthRow) wealthRow[m]=w;
-      if(cpPtr<cpIdx.length && m===cpIdx[cpPtr]){
-        if(w<liabChecks[cpPtr]) annFail=true;
-        cpPtr++;
-      }
-    }
-    const term=w;
-    sumTerm+=term;
-    sumCum+=(term-1);
-    sumAnn+=Math.pow(term,1/horizonYears)-1;
-    if(term<guar) termShortCount++;
-    if(annFail) annShortCount++;
-    if(termReturns) termReturns[p]=term-1;
-    if(wealthRow) keptPaths.push(wealthRow);
-  }
-  return {
-    meanAnn:sumAnn/nPaths,
-    meanCum:sumCum/nPaths,
-    meanTerm:sumTerm/nPaths,
-    termShortfallProb:termShortCount/nPaths,
-    annShortfallProb:annShortCount/nPaths,
-    termReturns, keptPaths
-  };
+function quantile(sorted,p){
+  const n=sorted.length;
+  const pos=p*(n-1), lo=Math.floor(pos), hi=Math.ceil(pos);
+  if(lo===hi) return sorted[lo];
+  return sorted[lo]+(sorted[hi]-sorted[lo])*(pos-lo);
 }
 
-function runGrid(){
+function runGrid(params){
   const nMonths=horizonYears*MONTHS_PER_YEAR;
-  const checkpoints=[];
-  for(let y=1;y<=horizonYears;y++) checkpoints.push(y*MONTHS_PER_YEAR);
   const liab=liabilityCurve(nMonths);
-  const liabChecks=checkpoints.map(m=>liab[m-1]);
-  const guar=liabChecks[liabChecks.length-1];
+  const guar=liab[nMonths-1];
 
-  const rows=[];
-  let selected=null;
+  /* annual assumptions -> monthly -> log-space GBM parameters
+     monthly mean = (1+annual)^(1/12)-1 ; monthly vol = annual/sqrt(12)
+     log drift    = mu - 0.5*sigma^2    ; log vol     = sigma            */
+  const muLog=new Float64Array(3), sigLog=new Float64Array(3), muM=new Float64Array(3);
+  for(let a=0;a<3;a++){
+    const mu=Math.pow(1+params.annRet[a],1/MONTHS_PER_YEAR)-1;
+    const sg=params.annVol[a]/Math.sqrt(MONTHS_PER_YEAR);
+    muM[a]=mu; sigLog[a]=sg; muLog[a]=mu-0.5*sg*sg;
+  }
+  const L=cholesky(HIST.corr);
 
+  /* allocation grid */
+  const allocs=[];
   for(const bw of BOND_WEIGHTS){
     const eqW=1-bw;
     for(const ls of LONG_BOND_SHARES){
-      const w10=bw*ls, w35=bw*(1-ls);
-      const pr=new Float64Array(RET.eq.length);
-      for(let i=0;i<pr.length;i++) pr[i]=w35*RET.b35[i]+w10*RET.b10[i]+eqW*RET.eq[i];
-
-      const isSel = Math.abs(bw-SELECT_BOND_WEIGHT)<1e-9 && Math.abs(ls-SELECT_LONG_SHARE)<1e-9;
-      const rng=mulberry32(SEED); // reset per allocation for reproducibility
-      const r=simulateAllocation(pr,nMonths,blockSize,checkpoints,liabChecks,guar,N_SIMS,rng,isSel);
-
-      rows.push({
+      allocs.push({
         bond_weight:bw, equity_weight:eqW, long_share:ls,
-        w35, w10,
-        mean_ann:r.meanAnn, mean_cum:r.meanCum, mean_term:r.meanTerm,
-        term_short:r.termShortfallProb, ann_short:r.annShortfallProb
+        w35:bw*(1-ls), w10:bw*ls,
+        w:[bw*(1-ls), bw*ls, eqW],
+        term:new Float64Array(nSims),
+        paths:[]
       });
-      if(isSel) selected={...r, guar, liab, checkpoints, nMonths};
     }
   }
-  rows.sort((a,b)=>a.ann_short-b.ann_short || a.term_short-b.term_short
-                   || a.bond_weight-b.bond_weight || a.long_share-b.long_share);
-  return {rows, selected, guar, checkpoints, nMonths, liab};
+
+  /* one shock block at a time, reused across every allocation:
+     common random numbers, flat memory */
+  const rng=mulberry32(SEED);
+  const nrm=normalDraw(rng);
+  const ar=new Float64Array(CHUNK_PATHS*nMonths*3);
+
+  for(let start=0;start<nSims;start+=CHUNK_PATHS){
+    const P=Math.min(CHUNK_PATHS,nSims-start);
+    for(let i=0;i<P*nMonths;i++){
+      const z0=nrm(), z1=nrm(), z2=nrm();
+      const c0=L[0][0]*z0;
+      const c1=L[1][0]*z0+L[1][1]*z1;
+      const c2=L[2][0]*z0+L[2][1]*z1+L[2][2]*z2;
+      const b=i*3;
+      ar[b  ]=Math.expm1(muLog[0]+sigLog[0]*c0);
+      ar[b+1]=Math.expm1(muLog[1]+sigLog[1]*c1);
+      ar[b+2]=Math.expm1(muLog[2]+sigLog[2]*c2);
+    }
+    for(const A of allocs){
+      const w0=A.w[0], w1=A.w[1], w2=A.w[2];
+      for(let p=0;p<P;p++){
+        const keep=(start+p)<N_ILLUSTRATIVE_PATHS;
+        const row=keep?new Float64Array(nMonths):null;
+        let wealth=1;
+        const base=p*nMonths*3;
+        for(let m=0;m<nMonths;m++){
+          const b=base+m*3;
+          wealth*=1+(w0*ar[b]+w1*ar[b+1]+w2*ar[b+2]);
+          if(row) row[m]=wealth;
+        }
+        A.term[start+p]=wealth;
+        if(row) A.paths.push(row);
+      }
+    }
+  }
+
+  /* summarise */
+  const rows=[];
+  for(const A of allocs){
+    let sumAnn=0,sumCum=0,sumTerm=0,shortCount=0,sumShortAll=0;
+    for(let i=0;i<nSims;i++){
+      const W=A.term[i];
+      sumTerm+=W; sumCum+=W-1;
+      sumAnn+=Math.pow(W,1/horizonYears)-1;
+      if(W<guar){shortCount++; sumShortAll+=guar-W;}
+    }
+    const sorted=Float64Array.from(A.term).sort();
+    rows.push({
+      key:`${A.bond_weight}|${A.long_share}`,
+      bond_weight:A.bond_weight, equity_weight:A.equity_weight, long_share:A.long_share,
+      w35:A.w35, w10:A.w10,
+      duration:A.w35*4.0+A.w10*13.0,
+      ann_drift:Math.pow(1+(A.w[0]*muM[0]+A.w[1]*muM[1]+A.w[2]*muM[2]),MONTHS_PER_YEAR)-1,
+      mean_ann:sumAnn/nSims,
+      mean_cum:sumCum/nSims,
+      mean_term:sumTerm/nSims,
+      median_cum:quantile(sorted,0.50)-1,
+      p05_cum:quantile(sorted,0.05)-1,
+      p95_cum:quantile(sorted,0.95)-1,
+      term_short:shortCount/nSims,
+      exp_short:sumShortAll/nSims,
+      cond_short:shortCount>0?sumShortAll/shortCount:0,
+      termReturns:A.term,
+      paths:A.paths
+    });
+  }
+  rows.sort((a,b)=>a.term_short-b.term_short
+                 || a.bond_weight-b.bond_weight || a.long_share-b.long_share);
+  return {rows, guar, liab, nMonths, params};
 }
 
 /* =========================================================================
@@ -402,22 +523,27 @@ const BASE_LAYOUT={
 };
 const CONFIG={displayModeBar:false,responsive:true};
 const pct=(x,d=1)=>(x*100).toFixed(d)+'%';
+const num=(x,d=2)=>x.toFixed(d);
 
 function riskClass(p){return p>=0.5?'risk-hi':p>=0.2?'risk-md':'risk-lo';}
+function allocLabel(r){return `${pct(r.bond_weight,0)} bonds · ${pct(r.long_share,0)} of sleeve in 10Y+ · ${pct(r.equity_weight,0)} equity`;}
+function selectedRow(res){return res.rows.find(r=>r.key===selKey)||res.rows[0];}
 
 function renderKPIs(res){
-  const sel=res.rows.find(r=>Math.abs(r.bond_weight-SELECT_BOND_WEIGHT)<1e-9 && Math.abs(r.long_share-SELECT_LONG_SHARE)<1e-9);
-  const topReturn=res.rows.reduce((a,b)=>b.mean_ann>a.mean_ann?b:a);
+  const sel=selectedRow(res);
+  const best=res.rows[0];
   const items=[
-    {lab:'Selected · ann. return',val:pct(sel.mean_ann,2),cls:'good'},
-    {lab:'Selected · annual shortfall',val:pct(sel.ann_short),cls:sel.ann_short>=0.5?'danger':sel.ann_short>=0.2?'warm':'good'},
-    {lab:'Highest-return allocation',val:`${pct(topReturn.bond_weight,0)} bond · ${pct(topReturn.long_share,0)} long`,cls:''},
-    {lab:'Highest-return · ann. return',val:pct(topReturn.mean_ann,2),cls:'good'},
+    {lab:'Selected · mean ann. return',val:pct(sel.mean_ann,2),cls:'good'},
+    {lab:'Selected · terminal shortfall',val:pct(sel.term_short),cls:sel.term_short>=0.5?'danger':sel.term_short>=0.2?'warm':'good'},
+    {lab:'Lowest-risk allocation',val:`${pct(best.bond_weight,0)} bond · ${pct(best.long_share,0)} long`,cls:''},
+    {lab:'Lowest-risk · shortfall',val:pct(best.term_short),cls:best.term_short>=0.5?'danger':best.term_short>=0.2?'warm':'good'},
   ];
   document.getElementById('kpis').innerHTML=items.map(i=>
     `<div class="kpi"><div class="k-lab">${i.lab}</div><div class="k-val ${i.cls}">${i.val}</div></div>`).join('');
   document.getElementById('kpiNote').textContent=
-    `Guarantee ${pct(guaranteeRate,2)}/yr compounds to ${pct(res.guar-1,2)} over ${horizonYears} years (${res.checkpoints.length} annual checkpoints at months ${res.checkpoints.join(', ')}). Sampling in ${blockSize}-month blocks.`;
+    `Guarantee ${pct(guaranteeRate,2)}/yr compounds to ${pct(res.guar-1,2)} over ${horizonYears} years, tested once at month ${res.nMonths}. `+
+    `Selected allocation: ${allocLabel(sel)}. Median terminal return ${pct(sel.median_cum,2)}, 5th percentile ${pct(sel.p05_cum,2)}. `+
+    `Assumptions: ${assumeMode==='history'?'historical':'custom'}.`;
 }
 
 function renderHeatmap(res){
@@ -426,7 +552,7 @@ function renderHeatmap(res){
     const zr=[],tr=[];
     for(const ls of LONG_BOND_SHARES){
       const r=res.rows.find(x=>Math.abs(x.bond_weight-bw)<1e-9&&Math.abs(x.long_share-ls)<1e-9);
-      zr.push(r.ann_short); tr.push(pct(r.mean_ann,1));
+      zr.push(r.term_short); tr.push(pct(r.mean_ann,1));
     }
     z.push(zr); text.push(tr);
   }
@@ -436,7 +562,7 @@ function renderHeatmap(res){
     y:BOND_WEIGHTS.map(b=>pct(b,0)),
     z, text, texttemplate:'%{text}', textfont:{family:PLOT_FONT.family,size:11,color:'#1a2332'},
     colorscale:[[0,'#d7efec'],[0.35,'#5bb3a8'],[0.65,'#c9781f'],[1,'#c8452f']],
-    colorbar:{title:{text:'Annual shortfall',font:PLOT_FONT,side:'right'},tickformat:'.0%',
+    colorbar:{title:{text:'Terminal shortfall',font:PLOT_FONT,side:'right'},tickformat:'.0%',
               tickfont:PLOT_FONT,outlinecolor:'#d9dee7',thickness:12},
     hovertemplate:'Bond %{y} · long %{x}<br>Shortfall %{z:.1%}<br>Mean ann. %{text}<extra></extra>'
   }];
@@ -447,29 +573,31 @@ function renderHeatmap(res){
 }
 
 function renderPaths(res){
-  const sel=res.selected;
-  const months=Array.from({length:sel.nMonths},(_,i)=>i+1);
+  const sel=selectedRow(res);
+  const months=Array.from({length:res.nMonths},(_,i)=>i+1);
   const traces=[];
-  sel.keptPaths.forEach(row=>{
+  sel.paths.forEach(row=>{
     traces.push({type:'scatter',mode:'lines',x:months,y:Array.from(row),
       line:{color:'rgba(15,125,116,0.30)',width:1},hoverinfo:'skip',showlegend:false});
   });
-  traces.push({type:'scatter',mode:'lines',x:months,y:sel.liab,
+  traces.push({type:'scatter',mode:'lines',x:months,y:res.liab,
     line:{color:'#c9781f',width:2.5},name:'Guarantee'});
-  const shapes=res.checkpoints.map(m=>({type:'line',x0:m,x1:m,y0:0,y1:1,yref:'paper',
-    line:{color:'#8a93a3',width:1,dash:'dash'}}));
+  const shapes=[{type:'line',x0:res.nMonths,x1:res.nMonths,y0:0,y1:1,yref:'paper',
+    line:{color:'#8a93a3',width:1,dash:'dash'}}];
   const layout={...BASE_LAYOUT,showlegend:true,
     legend:{font:PLOT_FONT,x:0.02,y:0.98,bgcolor:'rgba(255,255,255,0.75)',bordercolor:'#d9dee7',borderwidth:1},shapes,
-    xaxis:{...AXIS,title:{text:'Month',font:PLOT_FONT},range:[0,sel.nMonths+1]},
+    xaxis:{...AXIS,title:{text:'Month',font:PLOT_FONT},range:[0,res.nMonths+1]},
     yaxis:{...AXIS,title:{text:'Wealth index (start 1.00)',font:PLOT_FONT}}};
   Plotly.react('paths',traces,layout,CONFIG);
+  document.getElementById('pathsNote').textContent=
+    `${sel.paths.length} simulated paths for ${allocLabel(sel)}, against the compounding guarantee line. The dashed vertical marks the terminal test at month ${res.nMonths}.`;
 }
 
 function renderDist(res){
-  const sel=res.selected;
-  const rets=Array.from(sel.termReturns);
-  const mean=sel.meanCum;
-  const thresh=sel.guar-1;
+  const sel=selectedRow(res);
+  const rets=Array.from(sel.termReturns,w=>w-1);
+  const mean=sel.mean_cum;
+  const thresh=res.guar-1;
   const data=[{type:'histogram',x:rets,nbinsx:60,
     marker:{color:'#0f7d74',line:{color:'#ffffff',width:0.5}},opacity:0.85,
     hovertemplate:'Return %{x:.1%}<br>Count %{y}<extra></extra>'}];
@@ -482,30 +610,117 @@ function renderDist(res){
     {x:mean,y:1,yref:'paper',text:'mean',showarrow:false,font:{...PLOT_FONT,color:'#1a2332'},yshift:8,xshift:22}
   ];
   const layout={...BASE_LAYOUT,shapes,annotations,bargap:0.02,
-    xaxis:{...AXIS,title:{text:`Terminal ${sel.nMonths}-month cumulative return`,font:PLOT_FONT},tickformat:'.0%'},
+    xaxis:{...AXIS,title:{text:`Terminal ${res.nMonths}-month cumulative return`,font:PLOT_FONT},tickformat:'.0%'},
     yaxis:{...AXIS,title:{text:'Simulation count',font:PLOT_FONT}}};
   Plotly.react('dist',data,layout,CONFIG);
+  document.getElementById('distNote').textContent=
+    `All ${nSims.toLocaleString()} terminal returns for ${allocLabel(sel)}. Amber is the compounded guarantee threshold of ${pct(thresh,2)}; the ${pct(sel.term_short)} of mass to its left is terminal shortfall.`;
 }
 
 function renderTable(res){
-  const head=['Bond','Equity','Long sleeve','3-5Y wt','10Y+ wt','Mean ann.','Mean cum.','Term. shortfall','Annual shortfall'];
+  const head=['Bond','Equity','Long sleeve','3-5Y wt','10Y+ wt','Duration','Mean ann.','Median cum.','5th pct cum.','Term. shortfall','Loss if breached'];
   let html='<thead><tr>'+head.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>';
   for(const r of res.rows){
-    const isSel=Math.abs(r.bond_weight-SELECT_BOND_WEIGHT)<1e-9&&Math.abs(r.long_share-SELECT_LONG_SHARE)<1e-9;
-    html+=`<tr class="${isSel?'sel':''}">`+
+    html+=`<tr class="${r.key===selKey?'sel':''}" data-key="${r.key}">`+
       `<td>${pct(r.bond_weight,0)}</td>`+
       `<td>${pct(r.equity_weight,0)}</td>`+
       `<td>${pct(r.long_share,0)}</td>`+
       `<td>${pct(r.w35,0)}</td>`+
       `<td>${pct(r.w10,0)}</td>`+
+      `<td>${num(r.duration,1)}y</td>`+
       `<td>${pct(r.mean_ann,2)}</td>`+
-      `<td>${pct(r.mean_cum,2)}</td>`+
+      `<td>${pct(r.median_cum,2)}</td>`+
+      `<td>${pct(r.p05_cum,2)}</td>`+
       `<td class="${riskClass(r.term_short)}">${pct(r.term_short)}</td>`+
-      `<td class="${riskClass(r.ann_short)}">${pct(r.ann_short)}</td>`+
+      `<td>${pct(r.cond_short,2)}</td>`+
       `</tr>`;
   }
   html+='</tbody>';
-  document.getElementById('summaryTable').innerHTML=html;
+  const tbl=document.getElementById('summaryTable');
+  tbl.innerHTML=html;
+  tbl.querySelectorAll('tbody tr').forEach(tr=>{
+    tr.onclick=()=>{
+      selKey=tr.dataset.key;
+      renderKPIs(LAST); renderPaths(LAST); renderDist(LAST); renderTable(LAST);
+    };
+  });
+}
+
+/* =========================================================================
+   ASSUMPTION INPUTS
+   ========================================================================= */
+function buildAssumeRows(){
+  document.getElementById('assumeBody').innerHTML=ASSETS.map((a,i)=>
+    `<tr>
+       <td>${a.label}</td>
+       <td><span class="gfield" id="retField${i}"><input id="ret${i}" type="number" step="0.10" aria-label="${a.label} annual return"><span class="unit">%</span></span></td>
+       <td><span class="gfield" id="volField${i}"><input id="vol${i}" type="number" step="0.10" min="0" aria-label="${a.label} annual volatility"><span class="unit">%</span></span></td>
+       <td><span class="tag" id="tag${i}">history</span></td>
+     </tr>`).join('');
+  ASSETS.forEach((a,i)=>{
+    document.getElementById('ret'+i).addEventListener('input',()=>{if(assumeMode==='custom')markCustom();});
+    document.getElementById('vol'+i).addEventListener('input',()=>{if(assumeMode==='custom')markCustom();});
+  });
+}
+
+function fillAssumeFromHistory(){
+  ASSETS.forEach((a,i)=>{
+    document.getElementById('ret'+i).value=(HIST.annRet[i]*100).toFixed(2);
+    document.getElementById('vol'+i).value=(HIST.annVol[i]*100).toFixed(2);
+  });
+  markCustom();
+}
+
+function markCustom(){
+  ASSETS.forEach((a,i)=>{
+    const tag=document.getElementById('tag'+i);
+    const r=parseFloat(document.getElementById('ret'+i).value);
+    const v=parseFloat(document.getElementById('vol'+i).value);
+    const same = assumeMode==='history' ||
+      (Math.abs(r-HIST.annRet[i]*100)<0.005 && Math.abs(v-HIST.annVol[i]*100)<0.005);
+    tag.textContent=same?'history':'custom';
+    tag.className=same?'tag':'tag custom';
+  });
+}
+
+function syncAssumeLock(){
+  const locked=assumeMode==='history';
+  ASSETS.forEach((a,i)=>{
+    document.getElementById('ret'+i).disabled=locked;
+    document.getElementById('vol'+i).disabled=locked;
+    document.getElementById('retField'+i).classList.toggle('locked',locked);
+    document.getElementById('volField'+i).classList.toggle('locked',locked);
+  });
+  document.getElementById('resetBtn').style.display=locked?'none':'';
+  if(locked) fillAssumeFromHistory();
+  markCustom();
+}
+
+function readAssumptions(){
+  if(assumeMode==='history') return {annRet:[...HIST.annRet],annVol:[...HIST.annVol],ok:true};
+  const annRet=[],annVol=[]; let ok=true;
+  ASSETS.forEach((a,i)=>{
+    const rEl=document.getElementById('ret'+i), vEl=document.getElementById('vol'+i);
+    const r=parseFloat(rEl.value), v=parseFloat(vEl.value);
+    const rBad=!Number.isFinite(r)||r<-50||r>100;
+    const vBad=!Number.isFinite(v)||v<0||v>150;
+    document.getElementById('retField'+i).classList.toggle('invalid',rBad);
+    document.getElementById('volField'+i).classList.toggle('invalid',vBad);
+    if(rBad||vBad) ok=false;
+    annRet.push(r/100); annVol.push(v/100);
+  });
+  return {annRet,annVol,ok};
+}
+
+function renderCorr(){
+  const labels=ASSETS.map(a=>a.label);
+  let html='<thead><tr><th></th>'+labels.map(l=>`<th>${l.replace('Bonds ','')}</th>`).join('')+'</tr></thead><tbody>';
+  for(let i=0;i<3;i++){
+    html+=`<tr><td>${labels[i]}</td>`+
+      HIST.corr[i].map(v=>`<td>${v.toFixed(3)}</td>`).join('')+'</tr>';
+  }
+  html+='</tbody>';
+  document.getElementById('corrTable').innerHTML=html;
 }
 
 /* =========================================================================
@@ -519,19 +734,28 @@ function buildSegments(){
     b.onclick=()=>{horizonYears=v;syncSeg();updateMeta();};
     hs.appendChild(b);
   });
-  const bs=document.getElementById('blockSeg');
-  BLOCK_OPTIONS.forEach(v=>{
+  const ss=document.getElementById('simSeg');
+  NSIM_OPTIONS.forEach(v=>{
     const b=document.createElement('button');
-    b.textContent=v; b.setAttribute('aria-pressed',v===blockSize);
-    b.onclick=()=>{blockSize=v;syncSeg();updateMeta();};
-    bs.appendChild(b);
+    b.textContent=(v/1000)+'k'; b.setAttribute('aria-pressed',v===nSims);
+    b.onclick=()=>{nSims=v;syncSeg();updateMeta();};
+    ss.appendChild(b);
+  });
+  const ms=document.getElementById('modeSeg');
+  [['history','Historical'],['custom','Custom']].forEach(([k,lab])=>{
+    const b=document.createElement('button');
+    b.textContent=lab; b.dataset.mode=k; b.setAttribute('aria-pressed',k===assumeMode);
+    b.onclick=()=>{assumeMode=k;syncSeg();syncAssumeLock();};
+    ms.appendChild(b);
   });
 }
 function syncSeg(){
   [...document.getElementById('horizonSeg').children].forEach((b,i)=>
     b.setAttribute('aria-pressed',HORIZON_OPTIONS[i]===horizonYears));
-  [...document.getElementById('blockSeg').children].forEach((b,i)=>
-    b.setAttribute('aria-pressed',BLOCK_OPTIONS[i]===blockSize));
+  [...document.getElementById('simSeg').children].forEach((b,i)=>
+    b.setAttribute('aria-pressed',NSIM_OPTIONS[i]===nSims));
+  [...document.getElementById('modeSeg').children].forEach(b=>
+    b.setAttribute('aria-pressed',b.dataset.mode===assumeMode));
 }
 function readGuarantee(){
   const el=document.getElementById('guarInput');
@@ -544,34 +768,34 @@ function readGuarantee(){
 }
 function updateMeta(){
   const nMonths=horizonYears*MONTHS_PER_YEAR;
-  const nBlocks=Math.ceil(nMonths/blockSize);
   document.getElementById('runMeta').innerHTML=
-    `<strong>${nMonths}</strong> months · <strong>${nBlocks}</strong> blocks/path · <strong>${(N_SIMS/1000)}k</strong> paths × 20 allocations`;
+    `<strong>${nMonths}</strong> monthly steps · <strong>${(nSims/1000)}k</strong> paths × 20 allocations · <strong>${((nSims*nMonths*3)/1e6).toFixed(1)}M</strong> shocks`;
+  document.getElementById('nsimFoot').textContent=(nSims/1000)+'k';
 }
 
 async function loadData(){
   const dot=document.getElementById('dataDot'), st=document.getElementById('dataStatus');
-  document.getElementById('srcFoot').textContent = DATA_CSV_URL;
-  document.getElementById('nsimFoot').textContent = (N_SIMS/1000)+'k';
+  document.getElementById('srcFoot').textContent=DATA_CSV_URL;
 
   if(DATA_CSV_URL && DATA_CSV_URL!=="REPLACE_WITH_YOUR_RAW_CSV_URL"){
     try{
       const resp=await fetch(DATA_CSV_URL,{cache:'no-store'});
       if(!resp.ok) throw new Error('HTTP '+resp.status);
-      const txt=await resp.text();
-      RET=parseCSV(txt);
+      RET=parseCSV(await resp.text());
+      HIST=estimateHistory(RET);
       dot.className='dot ok';
-      st.textContent=`Loaded ${RET.eq.length} monthly observations from hosted data.`;
+      st.textContent=`Calibrated on ${HIST.n} monthly observations from hosted data.`;
       return;
     }catch(e){
       dot.className='dot err';
-      st.textContent=`Could not load hosted CSV (${e.message}). Using synthetic demo data — set DATA_CSV_URL.`;
+      st.textContent=`Could not load ${DATA_CSV_URL} (${e.message}). Showing synthetic demo data — fix the path or edit DATA_CSV_URL.`;
     }
   }else{
     dot.className='dot warn';
-    st.textContent='No data URL configured. Using synthetic demo data so you can preview the tool.';
+    st.textContent='No data URL configured. Showing synthetic demo data so you can preview the tool.';
   }
-  RET=syntheticData(168);
+  RET=syntheticData(180);
+  HIST=estimateHistory(RET);
 }
 
 function parseCSV(txt){
@@ -588,90 +812,36 @@ function parseCSV(txt){
     const e=parseFloat(c[iEq]),a=parseFloat(c[i35]),b=parseFloat(c[i10]);
     if(Number.isFinite(e)&&Number.isFinite(a)&&Number.isFinite(b)){eq.push(e);b35.push(a);b10.push(b);}
   }
-  if(eq.length<12) throw new Error('too few valid rows');
+  if(eq.length<24) throw new Error('need at least 24 valid rows to calibrate');
   return {eq,b35,b10};
 }
 
 function syntheticData(n){
   const rng=mulberry32(7);
-  const g=()=>{let u=0,v=0;while(!u)u=rng();while(!v)v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
+  const g=normalDraw(rng);
   const eq=[],b35=[],b10=[];
-  for(let i=0;i<n;i++){eq.push(0.007+0.042*g());b35.push(0.0028+0.009*g());b10.push(0.0038+0.021*g());}
+  for(let i=0;i<n;i++){
+    const zc=g();                       /* shared factor for mild correlation */
+    b35.push(0.0028+0.009*(0.7*zc+0.71*g()));
+    b10.push(0.0038+0.021*(0.5*zc+0.87*g()));
+    eq.push(0.0055+0.040*g());
+  }
   return {eq,b35,b10};
-}
-
-/* ---- index levels (top charts) ---- */
-async function loadLevels(){
-  if(!LEVELS_CSV_URL || LEVELS_CSV_URL==="REPLACE_WITH_YOUR_RAW_LEVELS_CSV_URL"){
-    document.getElementById('levelsNote').textContent=
-      'Set LEVELS_CSV_URL in index.html to show historical index levels here.';
-    return;
-  }
-  try{
-    const resp=await fetch(LEVELS_CSV_URL,{cache:'no-store'});
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    LEVELS=parseLevelsCSV(await resp.text());
-    renderLevels();
-  }catch(e){
-    document.getElementById('levelsNote').textContent=`Could not load levels CSV (${e.message}).`;
-  }
-}
-
-/* Columns read positionally: 0=date, 1=equity, 2=bond 3-5Y, 3=bond 10Y+ */
-function parseLevelsCSV(txt){
-  const lines=txt.trim().split(/\r?\n/);
-  const dates=[],eq=[],b35=[],b10=[];
-  for(let r=1;r<lines.length;r++){ // skip header row
-    const c=lines[r].split(',');
-    if(c.length<4) continue;
-    const d=c[0].trim();
-    const e=parseFloat(c[1]),a=parseFloat(c[2]),b=parseFloat(c[3]);
-    if(d && Number.isFinite(e)&&Number.isFinite(a)&&Number.isFinite(b)){
-      dates.push(d); eq.push(e); b35.push(a); b10.push(b);
-    }
-  }
-  if(dates.length<2) throw new Error('too few valid rows');
-  return {dates,eq,b35,b10};
-}
-
-function renderLevels(){
-  const L=LEVELS;
-  const bondData=[
-    {type:'scatter',mode:'lines',x:L.dates,y:L.b35,name:'3-5Y',
-     line:{color:'#0f7d74',width:1.8},hovertemplate:'%{x}<br>3-5Y %{y:.2f}<extra></extra>'},
-    {type:'scatter',mode:'lines',x:L.dates,y:L.b10,name:'10Y+',
-     line:{color:'#c9781f',width:1.8},hovertemplate:'%{x}<br>10Y+ %{y:.2f}<extra></extra>'}
-  ];
-  const bondLayout={...BASE_LAYOUT,showlegend:true,
-    legend:{font:PLOT_FONT,x:0.02,y:0.98,bgcolor:'rgba(255,255,255,0.75)',bordercolor:'#d9dee7',borderwidth:1},
-    margin:{l:56,r:16,t:8,b:40},
-    xaxis:{...AXIS,title:{text:'',font:PLOT_FONT}},
-    yaxis:{...AXIS,title:{text:'Index level',font:PLOT_FONT}}};
-  Plotly.react('bondLevels',bondData,bondLayout,CONFIG);
-
-  const eqData=[
-    {type:'scatter',mode:'lines',x:L.dates,y:L.eq,name:'Equity',
-     line:{color:'#1a2332',width:1.8},hovertemplate:'%{x}<br>Equity %{y:.0f}<extra></extra>'}
-  ];
-  const eqLayout={...BASE_LAYOUT,showlegend:false,margin:{l:64,r:16,t:8,b:40},
-    xaxis:{...AXIS,title:{text:'',font:PLOT_FONT}},
-    yaxis:{...AXIS,title:{text:'Index level',font:PLOT_FONT}}};
-  Plotly.react('equityLevels',eqData,eqLayout,CONFIG);
-
-  document.getElementById('levelsNote').textContent=
-    `Index levels, ${L.dates[0]} to ${L.dates[L.dates.length-1]} (${L.dates.length} months). Bonds (total return) and equities (price) shown separately because their scales differ.`;
 }
 
 function run(){
   const btn=document.getElementById('runBtn'), busy=document.getElementById('busy');
   if(!readGuarantee()){busy.textContent='Enter a guarantee rate between 0 and 25%.';return;}
-  document.getElementById('guarFoot').textContent = pct(guaranteeRate,2);
+  const params=readAssumptions();
+  if(!params.ok){busy.textContent='Check the highlighted assumption fields: return −50 to 100%, volatility 0 to 150%.';return;}
+  document.getElementById('guarFoot').textContent=pct(guaranteeRate,2);
   btn.disabled=true; busy.textContent='Running…';
   setTimeout(()=>{
     const t0=performance.now();
     try{
-      const res=runGrid();
-      renderKPIs(res); renderHeatmap(res); renderPaths(res); renderDist(res); renderTable(res);
+      LAST=runGrid(params);
+      if(!LAST.rows.some(r=>r.key===selKey)) selKey=`${SELECT_BOND_WEIGHT}|${SELECT_LONG_SHARE}`;
+      renderKPIs(LAST); renderHeatmap(LAST); renderPaths(LAST); renderDist(LAST); renderTable(LAST);
       busy.textContent=`Done in ${((performance.now()-t0)/1000).toFixed(2)}s`;
     }catch(e){
       busy.textContent='Error: '+e.message;
@@ -682,12 +852,16 @@ function run(){
 
 /* boot */
 (async function(){
-  buildSegments(); updateMeta();
+  buildSegments(); buildAssumeRows(); updateMeta();
+  selKey=`${SELECT_BOND_WEIGHT}|${SELECT_LONG_SHARE}`;
   document.getElementById('runBtn').onclick=run;
+  document.getElementById('resetBtn').onclick=()=>{fillAssumeFromHistory();};
   document.getElementById('guarInput').addEventListener('keydown',e=>{if(e.key==='Enter')run();});
   await loadData();
+  fillAssumeFromHistory();
+  syncAssumeLock();
+  renderCorr();
   run();
-  loadLevels(); // top charts load independently; don't block the simulation
 })();
 </script>
 </body>
