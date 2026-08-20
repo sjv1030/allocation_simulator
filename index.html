@@ -290,12 +290,12 @@
 <script>
 /* =========================================================================
    CONFIG  —  point this at your aligned-returns CSV
-   This is the file the Python model writes as tmls_aligned_monthly_returns.csv.
+   This is the file the Python model writes (OUT_ALIGNED), renamed to aligned_returns.csv.
    Expected columns (header row): date, bond_3_5_return, bond_10_plus_return, equity_return
    Returns must be decimals (0.0123), not percent. A relative path works if the
    CSV sits next to index.html in the repo; a raw GitHub URL also works.
    ========================================================================= */
-const DATA_CSV_URL = "tmls_aligned_monthly_returns.csv";
+const DATA_CSV_URL = "aligned_returns.csv";
 
 /* ---- fixed model assumptions ---- */
 const MONTHS_PER_YEAR = 12;
