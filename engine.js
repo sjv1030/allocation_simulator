@@ -5,12 +5,14 @@
     guarantee_rate:.0425,beir_rate:.0525,risk_free_rate:.0375,bel_growth_rate:null,mcl_growth_rate:null,
     guaranteed_pct_start:.57,n_years:2,n_sims:1000,method:'gbm',block_size_months:12,
     profit_split_shareholder:.10,profit_split_policyholder:.90,periodic_profit_check:true,
-    bonus_freq_months:12,random_seed:42};
+    bonus_freq_months:12,random_seed:42,equity_return_expectation:null,bond_3_5y_return_expectation:null,bond_10y_plus_return_expectation:null};
+  const expectationKeys=['equity_return_expectation','bond_3_5y_return_expectation','bond_10y_plus_return_expectation'];
   const equityWeights=[.20,.25,.30,.35,.40], bondShares=[.60,.70,.80,.90];
   const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
   function quantile(sorted,p) {const i=(sorted.length-1)*p,j=Math.floor(i);return sorted[j]+(sorted[Math.min(j+1,sorted.length-1)]-sorted[j])*(i-j);}
   function config(input) {
     const c={...defaults,...input};
+    for(const k of expectationKeys)if(c[k]!==null&&(!Number.isFinite(c[k])||c[k]<=-1||c[k]>1))throw Error(k+' must be blank or above -100% and at most 100%.');
     for(const k of ['pa0','psa0_pct_of_pa','required_psa_pct','shortfall_coverage','guarantee_rate','beir_rate','risk_free_rate','guaranteed_pct_start','profit_split_shareholder'])
       if(!Number.isFinite(c[k])) throw Error(k+' must be a finite number.');
     if(c.pa0<=0||c.psa0_pct_of_pa<0)throw Error('Starting assets must be positive and starting PSA nonnegative.');
@@ -31,10 +33,13 @@
   }
   function random(seed) {let a=seed>>>0;return ()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;};}
   function generate(hist,c) {
-    const {mu,cov}=stats(hist),n=c.n_years*12+1,out=new Float64Array(c.n_sims*n*3),rng=random(c.random_seed);
+    const {mu:historicalMu,cov}=stats(hist),n=c.n_years*12+1,out=new Float64Array(c.n_sims*n*3),rng=random(c.random_seed);
+    const mu=expectationKeys.map((k,j)=>c[k]==null?historicalMu[j]:Math.pow(1+c[k],1/12)-1);
+    const shifts=mu.map((v,j)=>c[expectationKeys[j]]==null?0:v-historicalMu[j]);
     if(c.method==='block') {
       if(c.block_size_months>=hist.length)throw Error('Block length must be smaller than history.');
-      for(let s=0;s<c.n_sims;s++)for(let t=0;t<n;){const start=Math.floor(rng()*(hist.length-c.block_size_months+1));for(let k=0;k<c.block_size_months&&t<n;k++,t++)for(let j=0;j<3;j++)out[(s*n+t)*3+j]=hist[start+k][j];}
+      if(hist.some(row=>row.some((v,j)=>v+shifts[j]<=-1)))throw Error('The return expectation shifts a bootstrap return to -100% or below. Increase the expectation or use GBM.');
+      for(let s=0;s<c.n_sims;s++)for(let t=0;t<n;){const start=Math.floor(rng()*(hist.length-c.block_size_months+1));for(let k=0;k<c.block_size_months&&t<n;k++,t++)for(let j=0;j<3;j++)out[(s*n+t)*3+j]=hist[start+k][j]+shifts[j];}
     } else {
       const l=Array.from({length:3},()=>[0,0,0]);
       for(let i=0;i<3;i++)for(let j=0;j<=i;j++){let v=cov[i][j];for(let k=0;k<j;k++)v-=l[i][k]*l[j][k];if(i===j&&v<=0)throw Error('Historical covariance is not positive definite.');l[i][j]=i===j?Math.sqrt(v):v/l[j][j];}

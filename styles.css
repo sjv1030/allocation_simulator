@@ -4,3 +4,5 @@
 .path-audit thead tr:first-child th{top:0;height:32px}.path-audit thead tr:nth-child(2) th{top:32px}.path-audit .shortfall-group{text-align:center;background:#edf2f4;padding:6px 12px}.path-audit th[rowspan]{vertical-align:middle}
 
 .liability-reset{display:inline-block;background:#fce3bc;color:#753d08;border:1px solid #dba04a;border-radius:4px;padding:3px 6px}
+
+.return-expectations{margin-top:20px}.return-expectations p{margin-top:0}.return-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}@media(max-width:600px){.return-grid{grid-template-columns:1fr}}

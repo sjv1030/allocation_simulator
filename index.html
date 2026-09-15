@@ -33,6 +33,14 @@
 <label>Random seed<input name="random_seed" type="number" value="42" min="0" max="4294967295" step="1" required></label>
 </fieldset>
 </div>
+<fieldset class="return-expectations"><legend>Annual total return expectations (optional)</legend>
+<p class="muted">Leave an asset blank to use its historical returns. Enter a percentage, e.g. 7 for 7% annually. These assumptions change expected asset returns, not the liability growth rates above.</p>
+<div class="return-grid">
+<label>STI equity (%)<input name="equity_return_expectation" type="number" min="-99.99" max="100" step="any" placeholder="Use historical returns"><small>Blank uses historical STI returns.</small></label>
+<label>10Y+ bonds (%)<input name="bond_10y_plus_return_expectation" type="number" min="-99.99" max="100" step="any" placeholder="Use historical returns"><small>Blank uses historical 10Y+ bond returns.</small></label>
+<label>3–5Y bonds (%)<input name="bond_3_5y_return_expectation" type="number" min="-99.99" max="100" step="any" placeholder="Use historical returns"><small>Blank uses historical 3–5Y bond returns.</small></label>
+</div><small>Annual expectations are converted to monthly rates using (1 + annual return)^(1/12) − 1. GBM retains historical covariance; bootstrap shifts the asset’s historical returns by a constant. Realized returns and CAGR can differ from your expectations.</small>
+</fieldset>
 <details class="advanced"><summary>Checkpoint timing &amp; advanced growth assumptions</summary><div class="advanced-grid">
 <label>Profit checks<select name="periodic_profit_check"><option value="true">Periodic + final horizon</option><option value="false">Final horizon only</option></select></label>
 <label>Checkpoint interval (months)<input name="bonus_freq_months" type="number" min="1" max="600" step="1" value="12" required></label>
@@ -43,7 +51,7 @@
 <div class="runbar"><button id="run" type="submit">Run simulation <span aria-hidden="true">→</span></button><button id="cancel" type="button" class="secondary" hidden>Cancel</button><span id="run-status" role="status" aria-live="polite">Ready. 20 allocations · 1,000 paths each.</span></div>
 </form>
 <section id="results" hidden>
-<div class="section-head"><div><div class="eyebrow">SIMULATION RESULTS</div><h2>Allocation comparison</h2><p id="run-meta" class="muted"></p></div><button id="export-summary" class="secondary">Download scenario CSV</button></div>
+<div class="section-head"><div><div class="eyebrow">SIMULATION RESULTS</div><h2>Allocation comparison</h2><p id="run-meta" class="muted"></p><p id="return-meta" class="muted"></p></div><button id="export-summary" class="secondary">Download scenario CSV</button></div>
 <div id="metrics" class="metrics"></div>
 <div class="panel"><h3>Mean CAGR based on portfolio allocation</h3><p class="muted">The bold value shows mean CAGR. Color and the smaller probability underneath show the chance of a capital injection. Each cell also shows the probability of no shortfall at any checkpoint and below-guarantee probability. Select a cell to explore that allocation.</p><div id="heatmap" class="table-scroll"></div><div class="legend-scale"><span>0%</span><i></i><span>100% injection probability</span></div></div>
 <div class="charts"><div class="panel"><h3>Pooled annualized returns</h3><p id="cagr-caption" class="muted"></p><div id="cagr-chart"></div></div><div class="panel"><h3>Pooled terminal returns</h3><p id="terminal-caption" class="muted"></p><div id="terminal-chart"></div></div></div>

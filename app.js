@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id),form=$('controls'),E=SimEngine;
 const pct=(v,d=1)=>(v*100).toFixed(d)+'%',money=v=>'$'+(v/1e6).toLocaleString(undefined,{maximumFractionDigits:1})+'m';
 const categories=['no_shortfall_ever','injection_then_recovery','psa_covered_no_injection','shortfall_every_checkpoint'];
 let result=null,selected=9,worker=null,workerUrl=null,running=false;
-const percentKeys=['psa0_pct_of_pa','required_psa_pct','shortfall_coverage','guarantee_rate','beir_rate','risk_free_rate','guaranteed_pct_start','profit_split_shareholder','bel_growth_rate','mcl_growth_rate'];
+const percentKeys=['psa0_pct_of_pa','required_psa_pct','shortfall_coverage','guarantee_rate','beir_rate','risk_free_rate','guaranteed_pct_start','profit_split_shareholder','bel_growth_rate','mcl_growth_rate','equity_return_expectation','bond_3_5y_return_expectation','bond_10y_plus_return_expectation'];
 function readConfig(){const c={};for(const [k,v] of new FormData(form)){c[k]=k==='method'?v:k==='periodic_profit_check'?v==='true':v===''?null:Number(v);if(percentKeys.includes(k)&&c[k]!==null)c[k]/=100;}c.pa0*=1e9;return E.config(c);}
 function syncControls(){form.elements.block_size_months.disabled=form.elements.method.value!=='block';form.elements.bonus_freq_months.disabled=form.elements.periodic_profit_check.value==='false';$('policyholder-share').textContent='Policyholder share: '+(100-Number(form.elements.profit_split_shareholder.value)).toFixed(2).replace(/\.00$/,'')+'% (retained in PA).';}
 form.addEventListener('input',()=>{syncControls();if(result&&!running)$('run-status').textContent='Inputs changed. Run again to update results; displayed results retain their previous settings.';});
@@ -32,6 +32,7 @@ function histogram(id,values,threshold,label){const width=570,height=300,left=52
   $(id).innerHTML=svg;
 }
 function render(){const {c,scenarios}=result;$('results').hidden=false;$('run-meta').textContent=`${c.method==='gbm'?'Correlated GBM':c.block_size_months+'-month block bootstrap'} · ${c.n_years} years + 1 settlement month · ${c.n_sims.toLocaleString()} paths × 20 allocations · seed ${c.random_seed} · ${c.periodic_profit_check?'checks every '+c.bonus_freq_months+' months + final':'final checkpoint only'}`;
+  if($('return-meta'))$('return-meta').textContent='Annual return expectations: '+[['STI equity','equity_return_expectation'],['10Y+ bonds','bond_10y_plus_return_expectation'],['3–5Y bonds','bond_3_5y_return_expectation']].map(([label,key])=>label+' '+(c[key]===null?'historical':pct(c[key],2))).join(' · ');
   const cagrs=scenarios.flatMap(s=>s.cagrs),terminal=scenarios.flatMap(s=>s.terminals),below=cagrs.filter(v=>v<c.guarantee_rate).length/cagrs.length;
   $('metrics').innerHTML=[[pct(E.mean(cagrs)),'Pooled mean CAGR'],[pct(below),'% of paths that fell below the guaranteed return'],[pct(E.mean(scenarios.map(s=>s.summary.pct_paths_injection))),'Pooled capital injection probability'],[money(E.mean(scenarios.map(s=>s.summary.mean_injection_amount))),'Pooled mean total capital injection']].map(([v,label])=>'<div class="metric"><strong>'+v+'</strong><span>'+label+'</span></div>').join('');
   $('cagr-caption').textContent=cagrs.length.toLocaleString()+' scenario-path observations · '+pct(below)+' below '+pct(c.guarantee_rate,2)+'. Allocations share return draws.';

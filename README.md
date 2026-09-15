@@ -25,7 +25,7 @@ Then open `http://localhost:8000`. Simulations run in a worker; Cancel stops a r
 | `xlsx.js` | Dependency-free Excel workbook exporter |
 | `singapore_equity_total_return.csv` | Original STI monthly returns |
 | `singapore_bond_total_return_index.csv` | Original 3–5Y and 10Y+ corporate bond returns |
-| `sim_v5.py` | Unchanged reference Python model |
+| `sim_v5.py` | Python model with optional annual return expectations |
 | `context.pdf` | Anonymized model background |
 | `scripts/build_data.py` | Rebuild browser history from the two CSVs |
 | `tests/` | Engine checks, Python parity checks and optional browser checks |
@@ -119,7 +119,7 @@ No dependencies are required to use the app. Engine tests require Node.js:
 npm test
 ```
 
-Python parity tests require NumPy and pandas. The reference model's plotting imports are omitted during tests; the accounting implementation is unchanged:
+Python parity tests require NumPy and pandas. The Python model's plotting imports are omitted during tests; the accounting implementation is unchanged:
 
 ```sh
 python tests/parity.py
@@ -142,3 +142,24 @@ python sim_v5.py --periodic_profit_check
 ## Assumptions and open items
 
 The 57% guaranteed-benefit share and 90:10 split are described as insurer-confirmed in the background PDF. Initial PA is inferred; the guarantee range was sourced externally. PSA size/floor, coverage, BEIR, risk-free rate and simplified liability growth/discounting remain assumptions. Actual liability cash-flow schedules, BEIR construction, MCL discount curve, PSA sizing methodology, bonus payout timing and policyholder behavior are unresolved. The port preserves the provided illustrative model; it does not supply those missing actuarial details.
+
+
+## Optional annual total return expectations
+
+The page accepts separate annual percentage inputs for **STI equity**, **10Y+ bonds**, and **3–5Y bonds**. Enter `8` for 8%. Leave any field blank to retain that asset's historical mean. Zero is a valid override; it does not mean blank. Restoring defaults clears all three fields. The historical statistics table always reports the original data, while the run summary and Excel `scenario_info` record the selected overrides.
+
+Python accepts the same optional expectations as **decimal annual rates**, consistent with its existing rate arguments:
+
+```sh
+python sim_v5.py --periodic_profit_check --equity_return_expectation 0.08 --bond_10y_plus_return_expectation 0.04 --bond_3_5y_return_expectation 0.025
+```
+
+Omit any argument to retain history for that asset. Omit all three to preserve the previous simulation behavior. `SimConfig` exposes the same three field names, defaulting to `None`.
+
+Annual expectations convert to monthly arithmetic means with `(1 + annual_return) ** (1/12) - 1`. GBM substitutes that monthly mean in its existing lognormal drift formula, retaining historical covariance and the same random draws. Bootstrap adds `target_monthly_mean - historical_monthly_mean` to each overridden asset's resampled returns, preserving covariance and block ordering. Bootstrap samples need not achieve the exact target because finite sampling and non-wrapping blocks give historical observations unequal inclusion frequencies. Realized CAGR can differ from the expectation in either method.
+
+Expectations must exceed -100% and be at most 100% annually. A bootstrap override that makes a historical monthly return -100% or lower is rejected. Blank fields leave the original historical calibration unchanged, including its original monthly mean rather than a recomputed annual equivalent.
+
+Validation: `python tests/return_expectations.py` checks blank-input equivalence to `sim_v5_old.py`, partial/zero/negative overrides, both simulation methods and invalid-input rejection. The `_old` source files are retained as local backups.
+
+For this update, upload `index.html`, `app.js`, `engine.js`, `styles.css` and this README to refresh the website. Updating only the HTML will not install the new calculation logic. The Python file is for local model use and is not required by the website.
